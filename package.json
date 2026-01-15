@@ -1,0 +1,19 @@
+{
+  "name": "wind-map",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vite": "^7.2.4"
+  },
+  "dependencies": {
+    "@types/d3-geo": "^3.1.0",
+    "d3-geo": "^3.1.1"
+  }
+}
