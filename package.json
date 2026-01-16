@@ -6,10 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "wind:update": "ts-node scripts/convertGfsJson.ts"
   },
   "devDependencies": {
-    "typescript": "~5.9.3",
+    "@types/node": "^25.0.9",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
     "vite": "^7.2.4"
   },
   "dependencies": {
