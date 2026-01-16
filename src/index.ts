@@ -59,10 +59,10 @@ async function main() {
     window.innerWidth,
     window.innerHeight,
     {
-      numParticles: 15000,
-      maxAge: 400,
+      numParticles: 8000,
+      maxAge: 900,
       speed: 0.05,
-      respawnFraction: 0.001,
+      respawnFraction: 0.01,
     }
   );
 
