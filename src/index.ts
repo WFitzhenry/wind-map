@@ -59,19 +59,19 @@ async function main() {
     window.innerWidth,
     window.innerHeight,
     {
-      numParticles: 8000,
+      numParticles: 15000,
       maxAge: 400,
-      speed: 0.02,
+      speed: 0.05,
       respawnFraction: 0.001,
     }
   );
 
   // --- Map wind speed to color ---
   function speedToColor(speed: number) {
-    const h = Math.min(240 - (speed / 20) * 240, 240);
+    // Map speed 0-25m/s to Hue 240 (Blue) down to 0 (Red)
+    const h = Math.max(0, 240 - speed * 10);
     return `hsl(${h}, 100%, 70%)`;
   }
-
   // --- Resize canvas and redraw map ---
   function resizeCanvas() {
     canvas.width = window.innerWidth;
@@ -105,34 +105,49 @@ async function main() {
   window.addEventListener("resize", resizeCanvas);
   resizeCanvas();
 
-  // --- Animation loop ---
   function frame() {
-    // 1. Draw the static background map onto the main canvas
     ctx.drawImage(bgCanvas, 0, 0);
 
-    // 2. FADE EFFECT (The fix)
-    // Instead of painting black, we "rub out" a bit of the old trails
-    trailCtx.globalCompositeOperation = "destination-out"; // This makes new drawing erase existing pixels
-    trailCtx.fillStyle = "rgba(0,0,0,0.1)"; // Adjust this (0.1 = faster fade, 0.01 = long trails)
+    // 1. Clear trails with transparency (from previous fix)
+    trailCtx.globalCompositeOperation = "destination-out";
+    trailCtx.fillStyle = "rgba(0,0,0,0.1)";
     trailCtx.fillRect(0, 0, trailCanvas.width, trailCanvas.height);
-
-    // 3. Reset composite operation to draw normally
     trailCtx.globalCompositeOperation = "source-over";
 
-    // 4. Draw particles on trail canvas
     for (const p of particles.particles) {
-      const wind = field.sample(p.x, p.y);
-      const speed = Math.sqrt(wind.u * wind.u + wind.v * wind.v);
+      // 2. Use the built-in D3 invert function
+      // Converts pixel [x, y] -> [longitude, latitude]
+      const coords = projection.invert([p.x, p.y]);
 
-      trailCtx.fillStyle = speedToColor(speed);
+      if (coords) {
+        const [lon, lat] = coords;
 
-      // Draw the particle
-      trailCtx.fillRect(p.x, p.y, 1.5, 1.5);
+        // 3. Map Lon/Lat to your Wind Grid Indices
+        // Longitude: -180 to 180 (Total 360 degrees)
+        // Latitude: 90 (North) to -90 (South) (Total 180 degrees)
+
+        // Standardize longitude to 0-360 if your data starts at 0 (Atlantic)
+        const adjustedLon = lon < 0 ? lon + 360 : lon;
+
+        const gridX = (adjustedLon / 360) * windData.header.nx;
+        const gridY = ((90 - lat) / 180) * windData.header.ny;
+
+        // 4. Sample the field using the calculated grid coordinates
+        const wind = field.sampleInterpolated(gridX, gridY);
+
+        if (wind) {
+          const speed = Math.sqrt(wind.u * wind.u + wind.v * wind.v);
+
+          // 5. Apply Color
+          trailCtx.fillStyle = speedToColor(speed);
+
+          // Use a slightly larger pixel (1.5 to 2) so the color is visible
+          trailCtx.fillRect(p.x, p.y, 1.5, 1.5);
+        }
+      }
     }
 
-    // 5. Overlay the transparent trail canvas on top of the main canvas (map)
     ctx.drawImage(trailCanvas, 0, 0);
-
     particles.update();
     requestAnimationFrame(frame);
   }
