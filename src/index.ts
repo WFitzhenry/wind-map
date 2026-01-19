@@ -148,7 +148,7 @@ async function main() {
 
   particles = new ParticleSystem(canvas.width, canvas.height, {
     numParticles: 5000,
-    maxAge: 900,
+    maxAge: 1200,
   });
 
   select(canvas).call(zoomBehavior as any);
@@ -171,7 +171,7 @@ async function main() {
 
     // Fade trails
     trailCtx.globalCompositeOperation = "destination-out";
-    trailCtx.fillStyle = "rgba(0,0,0,0.1)";
+    trailCtx.fillStyle = "rgba(0,0,0,0.05)";
     trailCtx.fillRect(0, 0, trailCanvas.width, trailCanvas.height);
     trailCtx.globalCompositeOperation = "source-over";
 
@@ -198,7 +198,9 @@ async function main() {
       p.y -= wind.v * SPEED_SCALE * zoomFactor;
 
       trailCtx.fillStyle = speedToColor(speed);
-      trailCtx.fillRect(p.x, p.y, 1.5, 1.5);
+      trailCtx.beginPath();
+      trailCtx.arc(p.x, p.y, 1.0, 0, Math.PI * 2);
+      trailCtx.fill();
     }
 
     ctx.drawImage(trailCanvas, 0, 0);
