@@ -73,17 +73,21 @@ async function main() {
   function redrawBackground() {
     bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
 
-    bgCtx.fillStyle = "#001f3f";
+    // 1. Deep charcoal for the sea
+    bgCtx.fillStyle = "#2d3135";
     bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+    bgCtx.strokeStyle = "rgba(255, 255, 255, 0.2)"; // Very faint white outline
+    bgCtx.lineWidth = 0.8;
 
-    bgCtx.fillStyle = "#0a3d62";
+    // 2. Lighter charcoal for the land
+    bgCtx.fillStyle = "#41464bff";
     countriesFC.features.forEach((feature) => {
       bgCtx.beginPath();
       path(feature.geometry as any);
       bgCtx.fill();
+      bgCtx.stroke();
     });
   }
-
   // --------------------------------------------------
   // Resize handling
   // --------------------------------------------------
