@@ -1,6 +1,6 @@
 import * as topojson from "topojson-client";
 import { geoMercator, geoPath } from "d3-geo";
-import { zoom, ZoomTransform } from "d3-zoom";
+import { zoom, ZoomTransform, zoomIdentity } from "d3-zoom";
 import { select } from "d3-selection";
 import { FeatureCollection, Feature, Geometry } from "geojson";
 
@@ -56,7 +56,7 @@ async function main() {
   const trailCtx = trailCanvas.getContext("2d")!;
 
   // ---- Projection ----
-  const projection = geoMercator();
+  const projection = geoMercator().translate([0, 0]);
   const path = geoPath<Geometry>().projection(projection).context(bgCtx);
 
   let currentTransform: ZoomTransform | null = null;
@@ -89,6 +89,25 @@ async function main() {
   // --------------------------------------------------
   let particles: ParticleSystem;
 
+  // --------------------------------------------------
+  // Zoom behavior (CORRECT)
+  // --------------------------------------------------
+  const zoomBehavior = zoom<HTMLCanvasElement, unknown>()
+    .scaleExtent([0.5, 8])
+    .on("start", () => {
+      trailCtx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
+    })
+    .on("zoom", (event) => {
+      const t = event.transform;
+      currentTransform = t;
+
+      // Use t.x and t.y directly. They now contain the
+      // centering offset AND the zoom-to-cursor offset.
+      projection.scale(baseScaleValue * t.k).translate([t.x, t.y]);
+
+      redrawBackground();
+    });
+
   function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -98,13 +117,20 @@ async function main() {
     trailCanvas.width = canvas.width;
     trailCanvas.height = canvas.height;
 
-    // Set base projection ONCE per resize
     baseScaleValue = baseScale();
-    baseTranslate = [canvas.width / 2, canvas.height / 2];
 
-    projection.scale(baseScaleValue).translate(baseTranslate);
+    // 1. Create the "starting" transform: Centered on screen, scale at 1 (multiplier)
+    const initialTransform = zoomIdentity
+      .translate(canvas.width / 2, canvas.height / 2)
+      .scale(1);
 
-    currentTransform = null;
+    // 2. Update the zoom behavior's internal state
+    select(canvas).call(zoomBehavior.transform as any, initialTransform);
+
+    // 3. Update projection to match this initial state immediately
+    projection
+      .scale(baseScaleValue * initialTransform.k)
+      .translate([initialTransform.x, initialTransform.y]);
 
     if (particles) {
       particles.width = canvas.width;
@@ -124,25 +150,6 @@ async function main() {
     numParticles: 5000,
     maxAge: 900,
   });
-
-  // --------------------------------------------------
-  // Zoom behavior (CORRECT)
-  // --------------------------------------------------
-  const zoomBehavior = zoom<HTMLCanvasElement, unknown>()
-    .scaleExtent([0.5, 8])
-    .on("start", () => {
-      trailCtx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
-    })
-    .on("zoom", (event) => {
-      const t = event.transform;
-      currentTransform = t;
-
-      projection
-        .scale(baseScaleValue * t.k)
-        .translate([baseTranslate[0] + t.x, baseTranslate[1] + t.y]);
-
-      redrawBackground();
-    });
 
   select(canvas).call(zoomBehavior as any);
 
