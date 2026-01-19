@@ -151,7 +151,7 @@ async function main() {
   resizeCanvas();
 
   particles = new ParticleSystem(canvas.width, canvas.height, {
-    numParticles: 5000,
+    numParticles: 8000,
     maxAge: 1200,
   });
 
