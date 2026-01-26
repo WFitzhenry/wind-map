@@ -18,7 +18,7 @@ export class ParticleSystem {
   constructor(
     width: number,
     height: number,
-    options: ParticleSystemOptions = {}
+    options: ParticleSystemOptions = {},
   ) {
     this.width = width;
     this.height = height;
@@ -26,7 +26,7 @@ export class ParticleSystem {
 
     const numParticles = options.numParticles ?? 5000;
     this.particles = Array.from({ length: numParticles }, () =>
-      this.createParticle()
+      this.createParticle(),
     );
   }
 

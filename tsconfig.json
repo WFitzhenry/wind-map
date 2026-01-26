@@ -2,9 +2,16 @@
   "compilerOptions": {
     "types": ["node"],
     "resolveJsonModule": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "esModuleInterop": true,
-    "module": "commonjs",
-    "target": "es6"
+    "module": "esnext",
+    "target": "es2020",
+    "lib": ["es2020", "dom", "dom.iterable"],
+    "noEmit": true
+  },
+  "ts-node": {
+    "esm": true,
+    "experimentalEsm": true,
+    "resolveJsonModule": true
   }
 }

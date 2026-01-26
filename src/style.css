@@ -1,0 +1,42 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+    Cantarell, sans-serif;
+  overflow: hidden;
+  background-color: #1a1a1a;
+}
+
+#map {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Mapbox GL JS specific styles */
+.mapboxgl-canvas {
+  z-index: 0;
+}
+
+.mapboxgl-ctrl-bottom-left {
+  display: none;
+}
+
+.mapboxgl-ctrl-bottom-right {
+  display: none;
+}
+
+.mapboxgl-ctrl-top-left {
+  display: none;
+}
+
+.mapboxgl-ctrl-top-right {
+  display: none;
+}

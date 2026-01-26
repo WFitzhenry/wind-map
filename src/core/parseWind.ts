@@ -14,7 +14,7 @@ export async function parseWind(url: string): Promise<WindData> {
 
   if (!raw || !raw.header || !raw.data || !raw.data.u || !raw.data.v) {
     throw new Error(
-      "Invalid wind.json format: expected { header, data: { u, v } }"
+      "Invalid wind.json format: expected { header, data: { u, v } }",
     );
   }
 
@@ -25,7 +25,7 @@ export async function parseWind(url: string): Promise<WindData> {
     throw new Error(
       `U/V array length mismatch. Expected ${nx * ny}, got ${u.length} / ${
         v.length
-      }`
+      }`,
     );
   }
 
