@@ -4,7 +4,6 @@ import { parseWind } from "./core/parseWind";
 import { VectorField } from "./core/vectorField";
 import { ParticleSystem } from "./core/particleSystem";
 
-// Set your Mapbox access token here (or use environment variable)
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
 // ---- Porto bounds for taxi data ----
@@ -15,15 +14,16 @@ const PORTO_BOUNDS = {
   lonMax: -8.52,
 };
 
-// --------------------------------------------------
-// Main
-// --------------------------------------------------
+const EUROPE_BOUNDS = {
+  latMin: 39.105,
+  latMax: 60.215,
+  lonMin: -2.74,
+  lonMax: -20.52,
+};
+
 async function main() {
-  // ---- Initialize Mapbox map ----
   const mapContainer = document.getElementById("map");
-  if (!mapContainer) {
-    throw new Error("Map container not found");
-  }
+  if (!mapContainer) throw new Error("Map container not found");
 
   const map = new Map({
     container: mapContainer,
@@ -33,7 +33,7 @@ async function main() {
     zoom: 4,
   });
 
-  // ---- Canvas setup for wind particles ----
+  // ---- Canvas setup ----
   const canvas = document.createElement("canvas");
   canvas.style.position = "absolute";
   canvas.style.top = "0";
@@ -43,228 +43,295 @@ async function main() {
 
   const ctx = canvas.getContext("2d")!;
 
-  // ---- Data source dropdown ----
-  const dropdownContainer = document.createElement("div");
-  dropdownContainer.style.position = "absolute";
-  dropdownContainer.style.top = "10px";
-  dropdownContainer.style.right = "10px";
-  dropdownContainer.style.zIndex = "10";
-  dropdownContainer.style.display = "flex";
-  dropdownContainer.style.alignItems = "center";
-  dropdownContainer.style.gap = "8px";
-
-  const label = document.createElement("label");
-  label.textContent = "Data Source:";
-  label.style.color = "white";
-  label.style.fontSize = "12px";
-  label.style.fontFamily = "monospace";
-
-  const select = document.createElement("select");
-  select.style.padding = "6px 10px";
-  select.style.borderRadius = "4px";
-  select.style.border = "1px solid #ccc";
-  select.style.fontSize = "12px";
-  select.style.fontFamily = "monospace";
-  select.style.cursor = "pointer";
-  select.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
-  select.style.color = "white";
-
-  const windOption = document.createElement("option");
-  windOption.value = "wind";
-  windOption.textContent = "Wind";
-
-  const taxiOption = document.createElement("option");
-  taxiOption.value = "taxi";
-  taxiOption.textContent = "Taxi Vector Field";
-
-  select.appendChild(windOption);
-  select.appendChild(taxiOption);
-  select.value = "wind"; // Default selection
-
-  dropdownContainer.appendChild(label);
-  dropdownContainer.appendChild(select);
-  mapContainer.appendChild(dropdownContainer);
-
-  // State for current data source and field
-  let currentDataSource = "wind";
-  let field: VectorField;
-
-  // Function to load vector field data
-  async function loadVectorField(dataSource: string) {
-    let vectorFieldData: { header: any; data: { u: number[]; v: number[] } };
-
-    if (dataSource === "taxi") {
-      vectorFieldData = await fetch("/taxi-vector-field.json").then((r) =>
-        r.json(),
-      );
-    } else {
-      vectorFieldData = await parseWind("/wind.json");
-    }
-
-    field = new VectorField(
-      vectorFieldData.header.nx,
-      vectorFieldData.header.ny,
-      vectorFieldData.data.u,
-      vectorFieldData.data.v,
-    );
-    currentDataSource = dataSource;
-  }
-
-  // Load initial wind data
-  await loadVectorField("wind");
-
-  // ---- Trail canvas ----
   const trailCanvas = document.createElement("canvas");
   const trailCtx = trailCanvas.getContext("2d")!;
 
-  // --------------------------------------------------
-  // Canvas resize
-  // --------------------------------------------------
-  let particles: ParticleSystem;
+  // ---- Control state ----
+  const controls = {
+    dataSource: "wind",
+    layer: "standard-satellite",
+    speedScale: 0.8,
+    taxiSpeedScale: 0.005,
+    numParticles: 12000,
+    maxAge: 1200,
+  };
 
-  function resizeCanvas() {
-    const rect = mapContainer.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    trailCanvas.width = rect.width;
-    trailCanvas.height = rect.height;
+  // ---- Control panel ----
+  const panel = document.createElement("div");
+  Object.assign(panel.style, {
+    position: "absolute",
+    top: "10px",
+    right: "10px",
+    zIndex: "10",
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+    padding: "10px",
+    background: "rgba(0,0,0,0.7)",
+    borderRadius: "6px",
+    fontFamily: "monospace",
+  });
+  mapContainer.appendChild(panel);
 
-    if (particles) {
-      particles.width = canvas.width;
-      particles.height = canvas.height;
-    }
+  function labeled(label: string, el: HTMLElement) {
+    const wrap = document.createElement("div");
+    wrap.style.display = "flex";
+    wrap.style.flexDirection = "column";
+    wrap.style.gap = "2px";
 
-    trailCtx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
+    const l = document.createElement("label");
+    l.textContent = label;
+    l.style.color = "white";
+    l.style.fontSize = "11px";
+
+    wrap.appendChild(l);
+    wrap.appendChild(el);
+    return wrap;
   }
 
-  // Resize on window resize
-  window.addEventListener("resize", resizeCanvas);
+  function styledSelect() {
+    const s = document.createElement("select");
+    Object.assign(s.style, {
+      padding: "4px",
+      fontSize: "11px",
+      background: "black",
+      color: "white",
+      border: "1px solid #555",
+    });
+    return s;
+  }
 
-  // ---- Dropdown change listener ----
-  select.addEventListener("change", async (e) => {
-    const newDataSource = (e.target as HTMLSelectElement).value;
-    if (newDataSource !== currentDataSource) {
-      await loadVectorField(newDataSource);
-      // Clear trails when switching data sources
-      trailCtx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
+  function styledInput(type: string) {
+    const i = document.createElement("input");
+    i.type = type;
+    Object.assign(i.style, {
+      fontSize: "11px",
+    });
+    return i;
+  }
 
-      // Zoom to appropriate bounds
-      if (newDataSource === "taxi") {
-        // Zoom to Porto bounds
-        map.fitBounds(
-          [
-            [PORTO_BOUNDS.lonMin, PORTO_BOUNDS.latMin],
-            [PORTO_BOUNDS.lonMax, PORTO_BOUNDS.latMax],
-          ],
-          { padding: 50 },
-        );
-      } else {
-        // Zoom to global view
-        map.fitBounds(
-          [
-            [-180, -85],
-            [180, 85],
-          ],
-          { padding: 50 },
-        );
-      }
-    }
+  // ---- Data source ----
+  const dataSelect = styledSelect();
+  ["wind", "taxi"].forEach((v) => {
+    const o = document.createElement("option");
+    o.value = v;
+    o.textContent = v;
+    dataSelect.appendChild(o);
   });
 
-  // Wait for map to load before starting animation
-  map.on("load", () => {
-    resizeCanvas();
+  panel.appendChild(labeled("Data Source", dataSelect));
 
-    particles = new ParticleSystem(canvas.width, canvas.height, {
-      numParticles: 8000,
-      maxAge: 1200,
-    });
+  // ---- Layer ----
+  const layerSelect = styledSelect();
+  [
+    "standard-satellite",
+    "light-v11",
+    "dark-v11",
+    "navigation-night-v1",
+  ].forEach((s) => {
+    const o = document.createElement("option");
+    o.value = s;
+    o.textContent = s;
+    layerSelect.appendChild(o);
+  });
 
-    // --------------------------------------------------
-    // Color mapping
-    // --------------------------------------------------
-    function speedToColor(speed: number) {
-      const h = Math.max(0, 240 - speed * 10);
-      return `hsl(${h}, 100%, 70%)`;
+  layerSelect.onchange = () => {
+    controls.layer = layerSelect.value;
+    map.setStyle(`mapbox://styles/mapbox/${controls.layer}`);
+  };
+
+  panel.appendChild(labeled("Layer", layerSelect));
+
+  // ---- Speed ----
+  const windSpeedInput = styledInput("range");
+  windSpeedInput.min = "0.1";
+  windSpeedInput.max = "2";
+  windSpeedInput.step = "0.1";
+  windSpeedInput.value = String(controls.speedScale);
+
+  windSpeedInput.oninput = () => {
+    controls.speedScale = Number(windSpeedInput.value);
+  };
+
+  const windSpeedWrap = labeled("Wind Speed", windSpeedInput);
+  panel.appendChild(windSpeedWrap);
+
+  // ---- Taxi Speed ----
+  const taxiSpeedInput = styledInput("range");
+  taxiSpeedInput.min = "0.001";
+  taxiSpeedInput.max = "0.010";
+  taxiSpeedInput.step = "0.001";
+  taxiSpeedInput.value = String(controls.taxiSpeedScale);
+
+  taxiSpeedInput.oninput = () => {
+    controls.taxiSpeedScale = Number(taxiSpeedInput.value);
+  };
+
+  const taxiSpeedWrap = labeled("Taxi Speed", taxiSpeedInput);
+  taxiSpeedWrap.style.display = "none";
+  panel.appendChild(taxiSpeedWrap);
+
+  // ---- Particles ----
+  const particleInput = styledInput("number");
+  particleInput.min = "1000";
+  particleInput.max = "50000";
+  particleInput.step = "1000";
+  particleInput.value = String(controls.numParticles);
+
+  // ---- Max age ----
+  const ageInput = styledInput("number");
+  ageInput.min = "100";
+  ageInput.max = "5000";
+  ageInput.step = "100";
+  ageInput.value = String(controls.maxAge);
+
+  dataSelect.onchange = async () => {
+    const source = dataSelect.value;
+
+    windSpeedWrap.style.display = source === "wind" ? "flex" : "none";
+    taxiSpeedWrap.style.display = source === "taxi" ? "flex" : "none";
+
+    await loadVectorField(source);
+  };
+  panel.appendChild(labeled("Particles", particleInput));
+  panel.appendChild(labeled("Max Age", ageInput));
+
+  let field: VectorField;
+  let particles: ParticleSystem;
+
+  async function loadVectorField(source: string) {
+    const data =
+      source === "taxi"
+        ? await fetch("/taxi-vector-field.json").then((r) => r.json())
+        : await parseWind("/wind.json");
+
+    field = new VectorField(
+      data.header.nx,
+      data.header.ny,
+      data.data.u,
+      data.data.v,
+    );
+
+    controls.dataSource = source;
+    trailCtx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
+
+    // Zoom to appropriate bounds
+    if (source === "taxi") {
+      // Zoom to Porto bounds
+      map.fitBounds(
+        [
+          [PORTO_BOUNDS.lonMin, PORTO_BOUNDS.latMin],
+          [PORTO_BOUNDS.lonMax, PORTO_BOUNDS.latMax],
+        ],
+        { padding: 50 },
+      );
+    } else {
+      // Zoom to global view
+      map.fitBounds(
+        [
+          [EUROPE_BOUNDS.lonMin, EUROPE_BOUNDS.latMin],
+          [EUROPE_BOUNDS.lonMax, EUROPE_BOUNDS.latMax],
+        ],
+        { padding: 50 },
+      );
     }
+  }
 
-    // --------------------------------------------------
-    // Animation loop
-    // --------------------------------------------------
-    const SPEED_SCALE = 0.8;
-    const TAXI_SPEED_SCALE = 0.01; // Much smaller scale for m/s velocities
+  dataSelect.onchange = async () => {
+    const source = dataSelect.value;
+
+    windSpeedWrap.style.display = source === "wind" ? "flex" : "none";
+    taxiSpeedWrap.style.display = source === "taxi" ? "flex" : "none";
+
+    await loadVectorField(source);
+  };
+
+  await loadVectorField("wind");
+
+  function rebuildParticles() {
+    particles = new ParticleSystem(canvas.width, canvas.height, {
+      numParticles: controls.numParticles,
+      maxAge: controls.maxAge,
+    });
+  }
+
+  particleInput.onchange = () => {
+    controls.numParticles = Number(particleInput.value);
+    rebuildParticles();
+  };
+
+  ageInput.onchange = () => {
+    controls.maxAge = Number(ageInput.value);
+    rebuildParticles();
+  };
+
+  function resize() {
+    const r = mapContainer.getBoundingClientRect();
+    canvas.width = r.width;
+    canvas.height = r.height;
+    trailCanvas.width = r.width;
+    trailCanvas.height = r.height;
+    rebuildParticles();
+  }
+
+  window.addEventListener("resize", resize);
+
+  map.on("load", () => {
+    resize();
+
+    function speedToColor(s: number) {
+      return `hsl(${240 - s * 10},100%,70%)`;
+    }
 
     function frame() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Fade trails
       trailCtx.globalCompositeOperation = "destination-out";
       trailCtx.fillStyle = "rgba(0,0,0,0.05)";
       trailCtx.fillRect(0, 0, trailCanvas.width, trailCanvas.height);
       trailCtx.globalCompositeOperation = "source-over";
 
       for (const p of particles.particles) {
-        // Convert screen coordinates to lng/lat
-        const lngLat = map.unproject([p.x, p.y]);
-        const [lng, lat] = [lngLat.lng, lngLat.lat];
-
-        // Calculate grid coordinates based on data source bounds
+        const { lng, lat } = map.unproject([p.x, p.y]);
         let gx: number, gy: number;
 
-        if (currentDataSource === "taxi") {
-          // Taxi data bounds from the actual data
-          const latMin = field.ny > 0 ? PORTO_BOUNDS.latMin : 0;
-          const latMax = field.ny > 0 ? PORTO_BOUNDS.latMax : 0;
-          const lonMin = field.nx > 0 ? PORTO_BOUNDS.lonMin : 0;
-          const lonMax = field.nx > 0 ? PORTO_BOUNDS.lonMax : 0;
-
-          // Map lat/lon to grid coordinates (match generation in taxiVectorField.ts)
-          gx = ((lng - lonMin) / (lonMax - lonMin)) * (field.nx - 1);
-          gy = ((lat - latMin) / (latMax - latMin)) * (field.ny - 1);
+        if (controls.dataSource === "taxi") {
+          gx =
+            ((lng - PORTO_BOUNDS.lonMin) /
+              (PORTO_BOUNDS.lonMax - PORTO_BOUNDS.lonMin)) *
+            (field.nx - 1);
+          gy =
+            ((lat - PORTO_BOUNDS.latMin) /
+              (PORTO_BOUNDS.latMax - PORTO_BOUNDS.latMin)) *
+            (field.ny - 1);
         } else {
-          // Wind data is global
           const adjLon = lng < 0 ? lng + 360 : lng;
           gx = (adjLon / 360) * (field.nx - 1);
           gy = ((90 - lat) / 180) * (field.ny - 1);
         }
 
-        const wind = field.sampleInterpolated(gx, gy);
-        const speed = Math.sqrt(wind.u * wind.u + wind.v * wind.v);
-
-        // Mercator correction
-        const latRad = (lat * Math.PI) / 180;
-        const cosLat = Math.cos(latRad);
-
-        // Get zoom level for scaling
+        const w = field.sampleInterpolated(gx, gy);
+        const speed = Math.hypot(w.u, w.v);
+        const cosLat = Math.cos((lat * Math.PI) / 180);
         const zoomFactor = Math.pow(2, map.getZoom());
 
-        // Use appropriate speed scale based on data source
-        const effectiveSpeedScale =
-          currentDataSource === "taxi" ? TAXI_SPEED_SCALE : SPEED_SCALE;
+        const scale =
+          controls.dataSource === "taxi"
+            ? controls.taxiSpeedScale
+            : controls.speedScale;
 
-        // Apply velocity
-        if (currentDataSource === "taxi") {
-          // For taxi data: u is eastward (longitude), v is northward (latitude)
-          // y increases downward on screen, so we subtract v to go north
-          p.x += wind.u * cosLat * effectiveSpeedScale * (zoomFactor / 256);
-          p.y -= wind.v * effectiveSpeedScale * (zoomFactor / 256);
-        } else {
-          // For wind data (global)
-          p.x += wind.u * cosLat * effectiveSpeedScale * (zoomFactor / 256);
-          p.y -= wind.v * effectiveSpeedScale * (zoomFactor / 256);
-        }
+        p.x += w.u * cosLat * scale * (zoomFactor / 256);
+        p.y -= w.v * scale * (zoomFactor / 256);
 
-        // Wrap particles that go off-screen
-        const rect = mapContainer.getBoundingClientRect();
-        if (p.x < 0) p.x += rect.width;
-        if (p.x >= rect.width) p.x -= rect.width;
-        if (p.y < 0) p.y += rect.height;
-        if (p.y >= rect.height) p.y -= rect.height;
+        if (p.x < 0) p.x += canvas.width;
+        if (p.x > canvas.width) p.x -= canvas.width;
+        if (p.y < 0) p.y += canvas.height;
+        if (p.y > canvas.height) p.y -= canvas.height;
 
         // Draw particle - use different styling for zero velocity cells
-        const isZeroVelocity = wind.u === 0 && wind.v === 0;
+        const isZeroVelocity = w.u === 0 && w.v === 0;
         trailCtx.fillStyle = isZeroVelocity
-          ? "rgba(255, 0, 0, 0.8)"
+          ? "rgba(255, 0, 0, 0)"
           : speedToColor(speed);
         trailCtx.beginPath();
         const particleSize = isZeroVelocity ? 1.5 : 1.0; // Slightly larger for zero velocity
