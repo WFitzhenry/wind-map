@@ -1,5 +1,3 @@
-// taxiVectorField.ts
-
 ///////////////////////////
 // Types
 ///////////////////////////
@@ -11,6 +9,8 @@ export interface Observation {
   longitude: number;
   time: number; // ms since epoch
 }
+
+export type TimeSlice = "morning" | "midday" | "evening";
 
 export interface VectorField {
   header: {
@@ -27,20 +27,38 @@ export interface VectorField {
   };
 }
 
+function inTimeSlice(timeMs: number, slice: TimeSlice): boolean {
+  const d = new Date(timeMs);
+  const hour = d.getHours();
+
+  switch (slice) {
+    case "morning":
+      return hour < 9;
+    case "midday":
+      return hour >= 9 && hour < 15;
+    case "evening":
+      return hour >= 15;
+  }
+}
+
 ///////////////////////////
-// Grid definition (Porto)
+// Grid definition (Beijing)
 ///////////////////////////
 
-const PORTO_BOUNDS = {
-  latMin: 41.03,
-  latMax: 41.315,
-  lonMin: -8.74,
-  lonMax: -8.3,
+/**
+ * Covers urban Beijing where taxi trajectories exist.
+ * Adjust if you want tighter cropping.
+ */
+const BEIJING_BOUNDS = {
+  latMin: 39.2,
+  latMax: 40.7,
+  lonMin: 115.5,
+  lonMax: 117.55,
 };
 
-// ~125m resolution (doubled precision)
-const LAT_STEP = 0.00125;
-const LON_STEP = 0.0015;
+// ~150m resolution
+const LAT_STEP = 0.0018; // ≈ 200 m (200 / 111,320)
+const LON_STEP = 0.00235; // ≈ 200 m at ~40° latitude
 
 ///////////////////////////
 // Helpers
@@ -58,11 +76,13 @@ function metersPerDegLon(lat: number): number {
 
 export function observationsToVectorField(
   observations: Observation[],
+  slice: TimeSlice,
 ): VectorField {
-  // 1. Group by entityId
+  const filtered = observations.filter((o) => inTimeSlice(o.time, slice));
+  // 1. Group observations by taxi (entityId)
   const tracks = new Map<string, Observation[]>();
 
-  for (const obs of observations) {
+  for (const obs of filtered) {
     if (!tracks.has(obs.entityId)) {
       tracks.set(obs.entityId, []);
     }
@@ -75,8 +95,12 @@ export function observationsToVectorField(
   }
 
   // 3. Grid setup
-  const nx = Math.ceil((PORTO_BOUNDS.lonMax - PORTO_BOUNDS.lonMin) / LON_STEP);
-  const ny = Math.ceil((PORTO_BOUNDS.latMax - PORTO_BOUNDS.latMin) / LAT_STEP);
+  const nx = Math.ceil(
+    (BEIJING_BOUNDS.lonMax - BEIJING_BOUNDS.lonMin) / LON_STEP,
+  );
+  const ny = Math.ceil(
+    (BEIJING_BOUNDS.latMax - BEIJING_BOUNDS.latMin) / LAT_STEP,
+  );
 
   const size = nx * ny;
   const sumU = new Float32Array(size);
@@ -92,19 +116,25 @@ export function observationsToVectorField(
       const dt = (p1.time - p0.time) / 1000; // seconds
       if (dt <= 0) continue;
 
+      const MAX_DT = 90; // seconds
+      if (dt > MAX_DT) continue;
+
       const dLat = p1.latitude - p0.latitude;
       const dLon = p1.longitude - p0.longitude;
 
       const midLat = (p0.latitude + p1.latitude) * 0.5;
       const midLon = (p0.longitude + p1.longitude) * 0.5;
 
-      // Convert to meters / second
+      // Convert to meters per second
       const v = (dLat * METERS_PER_DEG_LAT) / dt;
       const u = (dLon * metersPerDegLon(midLat)) / dt;
 
-      // Grid cell
-      const ix = Math.floor((midLon - PORTO_BOUNDS.lonMin) / LON_STEP);
-      const iy = Math.floor((midLat - PORTO_BOUNDS.latMin) / LAT_STEP);
+      const speed = Math.hypot(u, v);
+      if (speed > 45) continue;
+
+      // Grid cell index
+      const ix = Math.floor((midLon - BEIJING_BOUNDS.lonMin) / LON_STEP);
+      const iy = Math.floor((midLat - BEIJING_BOUNDS.latMin) / LAT_STEP);
 
       if (ix < 0 || ix >= nx || iy < 0 || iy >= ny) continue;
 
@@ -115,7 +145,7 @@ export function observationsToVectorField(
     }
   }
 
-  // 5. Average per cell
+  // 5. Average velocities per cell
   const u = new Float32Array(size);
   const v = new Float32Array(size);
 
@@ -129,13 +159,13 @@ export function observationsToVectorField(
     }
   }
 
-  // 6. Return wind-style JSON
+  // 6. Return wind-style vector field JSON
   return {
     header: {
       nx,
       ny,
-      latMin: PORTO_BOUNDS.latMin,
-      lonMin: PORTO_BOUNDS.lonMin,
+      latMin: BEIJING_BOUNDS.latMin,
+      lonMin: BEIJING_BOUNDS.lonMin,
       latStep: LAT_STEP,
       lonStep: LON_STEP,
     },

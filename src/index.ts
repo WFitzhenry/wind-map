@@ -8,10 +8,26 @@ mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
 // ---- Porto bounds for taxi data ----
 const PORTO_BOUNDS = {
-  latMin: 41.105,
-  latMax: 41.215,
+  latMin: 41.03,
+  latMax: 41.315,
   lonMin: -8.74,
-  lonMax: -8.52,
+  lonMax: -8.3,
+};
+
+// ---- Beijing bounds for taxi data ----
+const BEIJING_BOUNDS = {
+  latMin: 39.2,
+  latMax: 40.7,
+  lonMin: 115.5,
+  lonMax: 117.55,
+};
+
+// ---- Guangzhou bounds for taxi data ----
+const GUANG_BOUNDS = {
+  latMin: 21.6,
+  latMax: 23.2,
+  lonMin: 113.4,
+  lonMax: 114.4,
 };
 
 const EUROPE_BOUNDS = {
@@ -112,7 +128,16 @@ async function main() {
 
   // ---- Data source ----
   const dataSelect = styledSelect();
-  ["wind", "taxi"].forEach((v) => {
+  [
+    "wind",
+    "taxi-porto",
+    "taxi-beijing-morning",
+    "taxi-beijing-midday",
+    "taxi-beijing-evening",
+    "taxi-shenzhen",
+    "taxi-shenzhen-afternoon",
+    "taxi-shenzhen-morning",
+  ].forEach((v) => {
     const o = document.createElement("option");
     o.value = v;
     o.textContent = v;
@@ -178,21 +203,12 @@ async function main() {
   particleInput.step = "1000";
   particleInput.value = String(controls.numParticles);
 
-  // ---- Max age ----
   const ageInput = styledInput("number");
   ageInput.min = "100";
   ageInput.max = "5000";
   ageInput.step = "100";
   ageInput.value = String(controls.maxAge);
 
-  dataSelect.onchange = async () => {
-    const source = dataSelect.value;
-
-    windSpeedWrap.style.display = source === "wind" ? "flex" : "none";
-    taxiSpeedWrap.style.display = source === "taxi" ? "flex" : "none";
-
-    await loadVectorField(source);
-  };
   panel.appendChild(labeled("Particles", particleInput));
   panel.appendChild(labeled("Max Age", ageInput));
 
@@ -200,10 +216,28 @@ async function main() {
   let particles: ParticleSystem;
 
   async function loadVectorField(source: string) {
-    const data =
-      source === "taxi"
-        ? await fetch("/taxi-vector-field.json").then((r) => r.json())
-        : await parseWind("/wind.json");
+    let data: any;
+
+    if (source === "taxi-porto") {
+      data = await fetch("/taxi-vector-field.json").then((r) => r.json());
+    } else if (source === "taxi-shenzhen") {
+      data = await fetch("/guang-vector-field.json").then((r) => r.json());
+    } else if (source === "taxi-shenzhen-morning") {
+      data = await fetch("/guang-vector-field-morning.json").then((r) =>
+        r.json(),
+      );
+    } else if (source === "taxi-shenzhen-afternoon") {
+      data = await fetch("/guang-vector-field-afternoon.json").then((r) =>
+        r.json(),
+      );
+    } else if (source.startsWith("taxi-beijing")) {
+      const slice = source.replace("taxi-beijing-", "");
+      data = await fetch(`/taxi-beijing-vector-field-${slice}.json`).then((r) =>
+        r.json(),
+      );
+    } else {
+      data = await parseWind("/wind.json");
+    }
 
     field = new VectorField(
       data.header.nx,
@@ -215,9 +249,7 @@ async function main() {
     controls.dataSource = source;
     trailCtx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
 
-    // Zoom to appropriate bounds
-    if (source === "taxi") {
-      // Zoom to Porto bounds
+    if (source === "taxi-porto") {
       map.fitBounds(
         [
           [PORTO_BOUNDS.lonMin, PORTO_BOUNDS.latMin],
@@ -225,8 +257,27 @@ async function main() {
         ],
         { padding: 50 },
       );
+    } else if (
+      source === "taxi-shenzhen" ||
+      source === "taxi-shenzhen-morning" ||
+      source === "taxi-shenzhen-afternoon"
+    ) {
+      map.fitBounds(
+        [
+          [GUANG_BOUNDS.lonMin, GUANG_BOUNDS.latMin],
+          [GUANG_BOUNDS.lonMax, GUANG_BOUNDS.latMax],
+        ],
+        { padding: 50 },
+      );
+    } else if (source.startsWith("taxi-beijing")) {
+      map.fitBounds(
+        [
+          [BEIJING_BOUNDS.lonMin, BEIJING_BOUNDS.latMin],
+          [BEIJING_BOUNDS.lonMax, BEIJING_BOUNDS.latMax],
+        ],
+        { padding: 50 },
+      );
     } else {
-      // Zoom to global view
       map.fitBounds(
         [
           [EUROPE_BOUNDS.lonMin, EUROPE_BOUNDS.latMin],
@@ -241,7 +292,16 @@ async function main() {
     const source = dataSelect.value;
 
     windSpeedWrap.style.display = source === "wind" ? "flex" : "none";
-    taxiSpeedWrap.style.display = source === "taxi" ? "flex" : "none";
+    taxiSpeedWrap.style.display = source.startsWith("taxi") ? "flex" : "none";
+
+    if (source === "wind") {
+      controls.layer = "standard-satellite";
+    } else {
+      controls.layer = "dark-v11";
+    }
+
+    layerSelect.value = controls.layer;
+    map.setStyle(`mapbox://styles/mapbox/${controls.layer}`);
 
     await loadVectorField(source);
   };
@@ -295,7 +355,7 @@ async function main() {
         const { lng, lat } = map.unproject([p.x, p.y]);
         let gx: number, gy: number;
 
-        if (controls.dataSource === "taxi") {
+        if (controls.dataSource === "taxi-porto") {
           gx =
             ((lng - PORTO_BOUNDS.lonMin) /
               (PORTO_BOUNDS.lonMax - PORTO_BOUNDS.lonMin)) *
@@ -303,6 +363,28 @@ async function main() {
           gy =
             ((lat - PORTO_BOUNDS.latMin) /
               (PORTO_BOUNDS.latMax - PORTO_BOUNDS.latMin)) *
+            (field.ny - 1);
+        } else if (
+          controls.dataSource === "taxi-shenzhen" ||
+          controls.dataSource === "taxi-shenzhen-morning" ||
+          controls.dataSource === "taxi-shenzhen-afternoon"
+        ) {
+          gx =
+            ((lng - GUANG_BOUNDS.lonMin) /
+              (GUANG_BOUNDS.lonMax - GUANG_BOUNDS.lonMin)) *
+            (field.nx - 1);
+          gy =
+            ((lat - GUANG_BOUNDS.latMin) /
+              (GUANG_BOUNDS.latMax - GUANG_BOUNDS.latMin)) *
+            (field.ny - 1);
+        } else if (controls.dataSource.startsWith("taxi-beijing")) {
+          gx =
+            ((lng - BEIJING_BOUNDS.lonMin) /
+              (BEIJING_BOUNDS.lonMax - BEIJING_BOUNDS.lonMin)) *
+            (field.nx - 1);
+          gy =
+            ((lat - BEIJING_BOUNDS.latMin) /
+              (BEIJING_BOUNDS.latMax - BEIJING_BOUNDS.latMin)) *
             (field.ny - 1);
         } else {
           const adjLon = lng < 0 ? lng + 360 : lng;
@@ -315,10 +397,9 @@ async function main() {
         const cosLat = Math.cos((lat * Math.PI) / 180);
         const zoomFactor = Math.pow(2, map.getZoom());
 
-        const scale =
-          controls.dataSource === "taxi"
-            ? controls.taxiSpeedScale
-            : controls.speedScale;
+        const scale = controls.dataSource.startsWith("taxi")
+          ? controls.taxiSpeedScale
+          : controls.speedScale;
 
         p.x += w.u * cosLat * scale * (zoomFactor / 256);
         p.y -= w.v * scale * (zoomFactor / 256);
@@ -328,14 +409,13 @@ async function main() {
         if (p.y < 0) p.y += canvas.height;
         if (p.y > canvas.height) p.y -= canvas.height;
 
-        // Draw particle - use different styling for zero velocity cells
         const isZeroVelocity = w.u === 0 && w.v === 0;
         trailCtx.fillStyle = isZeroVelocity
-          ? "rgba(255, 0, 0, 0)"
+          ? "rgba(255,0,0,0)"
           : speedToColor(speed);
+
         trailCtx.beginPath();
-        const particleSize = isZeroVelocity ? 1.5 : 1.0; // Slightly larger for zero velocity
-        trailCtx.arc(p.x, p.y, particleSize, 0, Math.PI * 2);
+        trailCtx.arc(p.x, p.y, isZeroVelocity ? 1.5 : 1.0, 0, Math.PI * 2);
         trailCtx.fill();
       }
 
