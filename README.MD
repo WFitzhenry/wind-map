@@ -8,6 +8,14 @@ https://www.mdpi.com/2220-9964/12/10/398
 
 https://arxiv.org/pdf/2507.11584 // delivery drivers trajectories
 
+Porto runtime updates:
+npm run taxi:update
+
+This command writes both:
+
+- public/taxi-vector-field.json
+- public/taxi-observations.json
+
 // TODO
 
 - enahnce taxi colors and flows

@@ -27,6 +27,17 @@ export interface VectorField {
   };
 }
 
+export interface VectorFieldBuildOptions {
+  bounds?: {
+    latMin: number;
+    latMax: number;
+    lonMin: number;
+    lonMax: number;
+  };
+  latStep?: number;
+  lonStep?: number;
+}
+
 ///////////////////////////
 // Grid definition (Porto)
 ///////////////////////////
@@ -58,7 +69,12 @@ function metersPerDegLon(lat: number): number {
 
 export function observationsToVectorField(
   observations: Observation[],
+  options: VectorFieldBuildOptions = {},
 ): VectorField {
+  const bounds = options.bounds ?? PORTO_BOUNDS;
+  const latStep = options.latStep ?? LAT_STEP;
+  const lonStep = options.lonStep ?? LON_STEP;
+
   // 1. Group by entityId
   const tracks = new Map<string, Observation[]>();
 
@@ -75,8 +91,8 @@ export function observationsToVectorField(
   }
 
   // 3. Grid setup
-  const nx = Math.ceil((PORTO_BOUNDS.lonMax - PORTO_BOUNDS.lonMin) / LON_STEP);
-  const ny = Math.ceil((PORTO_BOUNDS.latMax - PORTO_BOUNDS.latMin) / LAT_STEP);
+  const nx = Math.ceil((bounds.lonMax - bounds.lonMin) / lonStep);
+  const ny = Math.ceil((bounds.latMax - bounds.latMin) / latStep);
 
   const size = nx * ny;
   const sumU = new Float32Array(size);
@@ -103,8 +119,8 @@ export function observationsToVectorField(
       const u = (dLon * metersPerDegLon(midLat)) / dt;
 
       // Grid cell
-      const ix = Math.floor((midLon - PORTO_BOUNDS.lonMin) / LON_STEP);
-      const iy = Math.floor((midLat - PORTO_BOUNDS.latMin) / LAT_STEP);
+      const ix = Math.floor((midLon - bounds.lonMin) / lonStep);
+      const iy = Math.floor((midLat - bounds.latMin) / latStep);
 
       if (ix < 0 || ix >= nx || iy < 0 || iy >= ny) continue;
 
@@ -134,10 +150,10 @@ export function observationsToVectorField(
     header: {
       nx,
       ny,
-      latMin: PORTO_BOUNDS.latMin,
-      lonMin: PORTO_BOUNDS.lonMin,
-      latStep: LAT_STEP,
-      lonStep: LON_STEP,
+      latMin: bounds.latMin,
+      lonMin: bounds.lonMin,
+      latStep,
+      lonStep,
     },
     data: {
       u: Array.from(u),

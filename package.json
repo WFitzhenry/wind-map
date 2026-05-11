@@ -12,7 +12,8 @@
     "taxi-beijing:convert": "tsx scripts/taxi_beijing_convert.ts",
     "taxi-beijing:update": "tsx scripts/runTaxiBeijingVectorField.ts",
     "guang:convert": "tsx scripts/convertGuang.ts",
-    "guang:update": "tsx scripts/runGuangVectorField.ts"
+    "guang:update": "tsx scripts/runGuangVectorField.ts",
+    "maritime:update": "tsx scripts/runMaritimeVectorField.ts"
   },
   "devDependencies": {
     "@types/mapbox-gl": "^1.15.0",

@@ -9,8 +9,19 @@ const ROOT = process.cwd();
 
 const INPUT_PATH = path.join(ROOT, "data", "taxi.json");
 const OUTPUT_PATH = path.join(ROOT, "public", "taxi-vector-field.json");
+const OBSERVATIONS_OUTPUT_PATH = path.join(
+  ROOT,
+  "public",
+  "taxi-observations.json",
+);
 
 function run() {
+  if (!fs.existsSync(INPUT_PATH)) {
+    throw new Error(
+      `Missing Porto observations at ${INPUT_PATH}. Add the file, then rerun npm run taxi:update to publish /public/taxi-observations.json for zoom-based runtime rebuilds.`,
+    );
+  }
+
   console.log("📥 Loading taxi data...");
   const raw = fs.readFileSync(INPUT_PATH, "utf-8");
   const data = JSON.parse(raw);
@@ -32,8 +43,14 @@ function run() {
 
   console.log("💾 Writing output...");
   fs.writeFileSync(OUTPUT_PATH, JSON.stringify(vectorField), "utf-8");
+  fs.writeFileSync(
+    OBSERVATIONS_OUTPUT_PATH,
+    JSON.stringify(observations),
+    "utf-8",
+  );
 
   console.log(`✅ Saved to ${OUTPUT_PATH}`);
+  console.log(`✅ Saved to ${OBSERVATIONS_OUTPUT_PATH}`);
 }
 
 run();
