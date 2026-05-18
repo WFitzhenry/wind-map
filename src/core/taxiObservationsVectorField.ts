@@ -18,6 +18,7 @@ export interface VectorFieldJson {
   data: {
     u: number[];
     v: number[];
+    count?: number[];
   };
 }
 
@@ -51,13 +52,19 @@ export function observationsToVectorField(
   observations: Observation[],
   options: VectorFieldBuildOptions = {},
 ): VectorFieldJson {
-  console.log("working!", options.latStep, options.lonStep);
   const bounds = options.bounds ?? DEFAULT_PORTO_BOUNDS;
   const latStep = options.latStep ?? DEFAULT_LAT_STEP;
   const lonStep = options.lonStep ?? DEFAULT_LON_STEP;
 
-  const nx = Math.max(1, Math.ceil((bounds.lonMax - bounds.lonMin) / lonStep));
-  const ny = Math.max(1, Math.ceil((bounds.latMax - bounds.latMin) / latStep));
+  // +1 ensures the final grid node reaches the requested max bound.
+  const nx = Math.max(
+    2,
+    Math.ceil((bounds.lonMax - bounds.lonMin) / lonStep) + 1,
+  );
+  const ny = Math.max(
+    2,
+    Math.ceil((bounds.latMax - bounds.latMin) / latStep) + 1,
+  );
 
   const size = nx * ny;
   const sumU = new Float32Array(size);
@@ -126,6 +133,7 @@ export function observationsToVectorField(
     data: {
       u: Array.from(u),
       v: Array.from(v),
+      count: Array.from(count),
     },
   };
 }
