@@ -16,7 +16,6 @@
     "maritime:update": "tsx scripts/runMaritimeVectorField.ts"
   },
   "devDependencies": {
-    "@types/mapbox-gl": "^1.15.0",
     "@types/node": "^25.0.9",
     "@types/topojson-client": "^3.1.5",
     "ts-node": "^10.9.2",
